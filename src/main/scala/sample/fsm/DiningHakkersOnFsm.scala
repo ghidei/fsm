@@ -5,12 +5,7 @@ import akka.actor.FSM._
 import akka.event.LoggingReceive
 
 import scala.collection.mutable
-import scala.concurrent.Await
 import scala.concurrent.duration._
-
-import akka.pattern.ask
-import akka.util.Timeout
-
 
 // Akka adaptation of
 // http://www.dalnefre.com/wp/2010/08/dining-philosophers-in-humus/
@@ -132,8 +127,8 @@ class FSMHakker(name: String, left: ActorRef, right: ActorRef) extends Actor wit
     case Event(Taken(`left`), TakenChopsticks(None, Some(right))) => startEating(left, right)
     case Event(Taken(`right`), TakenChopsticks(Some(left), None)) => startEating(left, right)
     case Event(Busy(chopstick), TakenChopsticks(leftOption, rightOption)) =>
-      leftOption.foreach(_ ! Put)
-      rightOption.foreach(_ ! Put)
+      leftOption.foreach(left => left ! Put)
+      rightOption.foreach(right => right ! Put)
       startThinking(10.milliseconds)
   }
 
@@ -179,13 +174,14 @@ class FSMHakker(name: String, left: ActorRef, right: ActorRef) extends Actor wit
 */
 object DiningHakkersOnFsm {
 
-  var terminatorActor: Option[ActorRef] = None
+  var terminatedActors: mutable.Set[ActorRef] = mutable.Set.empty
 
   def main(args: Array[String]): Unit = run()
 
   def run(): Unit = {
 
     val system = ActorSystem()
+    terminatedActors = mutable.Set.empty
 
     // Create 5 chopsticks
     val chopsticks = for (i <- 1 to 5) yield system.actorOf(Props[Chopstick], "Chopstick" + i)
@@ -195,52 +191,37 @@ object DiningHakkersOnFsm {
       (name, i) <- List("Ghosh", "Boner", "Klang", "Krasser", "Manie").zipWithIndex
     } yield system.actorOf(Props(classOf[FSMHakker], name, chopsticks(i), chopsticks((i + 1) % 5)))
 
-    terminatorActor = Option(system.actorOf(Terminator.props(hakkers.toSet), "terminator"))
+    system.actorOf(Terminator.props(hakkers.toSet), "terminator")
 
-    hakkers.foreach(_ ! Think)
+    hakkers.foreach(hak => hak ! Think)
 
     //system generally terminates in 35~ seconds. Any longer than 60 seconds => something must have gone wrong
     Thread.sleep(60000)
 
     system.terminate()
 
+    println(verifyCorrectness())
+
   }
 
   def verifyCorrectness(): Boolean = {
-    implicit val timeout: Timeout = Timeout(5 seconds)
-    try {
-      terminatorActor match {
-        case Some(actor) =>
-          val future = actor ? "getTerminatedActors"
-          val result = Await.result(future, timeout.duration).asInstanceOf[Set[ActorRef]]
-          println("Terminated actors: " + result)
-          result.size == 5
-        case None => println("No terminator actor"); false
-      }
-    }
-    catch {
-      case e: Exception => println("System has correctly terminated"); true
-    }
+    terminatedActors.size == 5
   }
-}
 
-object Terminator {
-  def props(actors: Set[ActorRef]): Props = Props(new Terminator(actors))
-}
+  object Terminator {
+    def props(actors: Set[ActorRef]): Props = Props(new Terminator(actors))
+  }
 
-class Terminator(actors: Set[ActorRef]) extends Actor {
-  val terminatedActors: mutable.Set[ActorRef] = mutable.Set.empty
-  actors.foreach(act => context watch act)
+  class Terminator(actors: Set[ActorRef]) extends Actor {
+    actors.foreach(act => context watch act)
 
-  def receive = LoggingReceive {
-    case Terminated(actor) =>
-      terminatedActors += actor
-      println("Actor " + actor.path.name + " has finished eating and has stopped.")
-      if(actors == terminatedActors){
-        println("All actors have finished eating. Terminating system.")
-        context.system.terminate()
-      }
-    case "getTerminatedActors" => sender() ! terminatedActors.toSet
+    def receive = LoggingReceive {
+      case Terminated(actor) =>
+        terminatedActors += actor
+        println("Actor " + actor.path.name + " has finished eating and has stopped.")
+        if(actors == terminatedActors) println("All actors have finished eating.")
+    }
   }
 
 }
+
