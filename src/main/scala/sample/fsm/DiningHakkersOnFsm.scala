@@ -1,5 +1,6 @@
 package sample.fsm
 
+
 import akka.actor._
 import akka.actor.FSM._
 import akka.event.LoggingReceive
@@ -87,8 +88,6 @@ final case class TakenChopsticks(left: Option[ActorRef], right: Option[ActorRef]
 */
 class FSMHakker(name: String, left: ActorRef, right: ActorRef) extends Actor with FSM[FSMHakkerState, TakenChopsticks] {
 
-  var eatCount = 0
-
   //All hakkers start waiting
   startWith(Waiting, TakenChopsticks(None, None))
 
@@ -155,9 +154,7 @@ class FSMHakker(name: String, left: ActorRef, right: ActorRef) extends Actor wit
       println("%s puts down his chopsticks and starts to think".format(name))
       left ! Put
       right ! Put
-      eatCount = eatCount + 1
-      if(eatCount >= 3) stop()
-      else startThinking(5.seconds)
+      stop()
   }
 
   // Initialize the hakker
@@ -195,8 +192,8 @@ object DiningHakkersOnFsm {
 
     hakkers.foreach(hak => hak ! Think)
 
-    //system generally terminates in 35~ seconds. Any longer than 60 seconds => something must have gone wrong
-    Thread.sleep(60000)
+    //system generally terminates in 25~ seconds. Any longer than 40 seconds => something must have gone wrong
+    Thread.sleep(40000)
 
     system.terminate()
 

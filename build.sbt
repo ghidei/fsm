@@ -10,3 +10,10 @@ licenses := Seq(("CC0", url("http://creativecommons.org/publicdomain/zero/1.0"))
 
 
 lazy val global = project in file (".")
+
+
+lazy val ldfiakka = (project in file ("ldfi-akka"))
+  .settings(
+    name := "ldfi-akka",
+    mainClass in Compile := Some("ldfi.akka.Main"))
+  .dependsOn(global)
