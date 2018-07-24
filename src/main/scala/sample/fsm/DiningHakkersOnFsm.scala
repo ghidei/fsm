@@ -5,7 +5,12 @@ import akka.actor.FSM._
 import akka.event.LoggingReceive
 
 import scala.collection.mutable
+import scala.concurrent.Await
 import scala.concurrent.duration._
+
+import akka.pattern.ask
+import akka.util.Timeout
+
 
 // Akka adaptation of
 // http://www.dalnefre.com/wp/2010/08/dining-philosophers-in-humus/
@@ -174,11 +179,14 @@ class FSMHakker(name: String, left: ActorRef, right: ActorRef) extends Actor wit
 */
 object DiningHakkersOnFsm {
 
-  val system = ActorSystem()
+  var terminatorActor: Option[ActorRef] = None
 
   def main(args: Array[String]): Unit = run()
 
   def run(): Unit = {
+
+    val system = ActorSystem()
+
     // Create 5 chopsticks
     val chopsticks = for (i <- 1 to 5) yield system.actorOf(Props[Chopstick], "Chopstick" + i)
     // Create 5 awesome fsm hakkers and assign them their left and right chopstick
@@ -187,10 +195,33 @@ object DiningHakkersOnFsm {
       (name, i) <- List("Ghosh", "Boner", "Klang", "Krasser", "Manie").zipWithIndex
     } yield system.actorOf(Props(classOf[FSMHakker], name, chopsticks(i), chopsticks((i + 1) % 5)))
 
-    system.actorOf(Terminator.props(hakkers.toSet), "terminator")
+    terminatorActor = Option(system.actorOf(Terminator.props(hakkers.toSet), "terminator"))
+
     hakkers.foreach(_ ! Think)
+
+    //system generally terminates in 35~ seconds. Any longer than 60 seconds => something must have gone wrong
+    Thread.sleep(60000)
+
+    system.terminate()
+
   }
 
+  def verifyCorrectness(): Boolean = {
+    implicit val timeout: Timeout = Timeout(5 seconds)
+    try {
+      terminatorActor match {
+        case Some(actor) =>
+          val future = actor ? "getTerminatedActors"
+          val result = Await.result(future, timeout.duration).asInstanceOf[Set[ActorRef]]
+          println("Terminated actors: " + result)
+          result.size == 5
+        case None => println("No terminator actor"); false
+      }
+    }
+    catch {
+      case e: Exception => println("System has correctly terminated"); true
+    }
+  }
 }
 
 object Terminator {
@@ -209,5 +240,7 @@ class Terminator(actors: Set[ActorRef]) extends Actor {
         println("All actors have finished eating. Terminating system.")
         context.system.terminate()
       }
+    case "getTerminatedActors" => sender() ! terminatedActors.toSet
   }
+
 }
