@@ -53,4 +53,4 @@ Read more about `akka.actor.FSM` in [the documentation](http://doc.akka.io/docs/
 
 9. Run ldfi-akka
 
-	`sbt "ldfiakka/runMain ldfi.akka.Main -m src/main/scala/sample/persistence/PersistentActorExample.scala -v src/main/scala/sample/persistence/PersistentActorExample.scala verifyCorrectness"`
+	`sbt "ldfiakka/runMain ldfi.akka.Main -m src/main/scala/sample/fsm/DiningHakkersOnFsm.scala -v src/main/scala/sample/fsm/DiningHakkersOnFsm.scala verifyCorrectness"`
