@@ -1,6 +1,5 @@
 package sample.fsm
 
-
 import akka.actor._
 import akka.actor.FSM._
 import akka.event.LoggingReceive
@@ -44,7 +43,8 @@ class Chopstick extends Actor with FSM[ChopstickState, TakenBy] {
   // When a chopstick is available, it can be taken by a some hakker
   when(Available) {
     case Event(Take, _) =>
-      goto(Taken) using TakenBy(sender()) replying Taken(self)
+      sender() ! Taken(self)
+      goto(Taken) using TakenBy(sender())
   }
 
   // When a chopstick is taken by a hakker
@@ -52,7 +52,8 @@ class Chopstick extends Actor with FSM[ChopstickState, TakenBy] {
   // But the owning hakker can put it back
   when(Taken) {
     case Event(Take, currentState) =>
-      stay replying Busy(self)
+      sender() ! Busy(self)
+      stay()
     case Event(Put, TakenBy(hakker)) if sender() == hakker =>
       goto(Available) using TakenBy(system.deadLetters)
   }
@@ -221,4 +222,5 @@ object DiningHakkersOnFsm {
   }
 
 }
+
 
